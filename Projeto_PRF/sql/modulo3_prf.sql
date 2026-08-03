@@ -23,7 +23,7 @@
 CREATE OR REPLACE TABLE acidentes_prf_2025 AS
 SELECT *
 FROM read_csv_auto(
-    '{[diretorio do arquivo .csv]}',
+    'C:/Users/Aluno/Documents/Caio Vital/Projeto_PRF/dados_brutos/acidentes2025.csv.csv',
     delim=';',
     header=true,
     sample_size=-1,
@@ -531,6 +531,8 @@ WITH (
 );
 
 -- Base modelável preliminar
+-- IMPORTANTE: mortos é excluído propositalmente para evitar data leakage,
+-- já que é a variável que define diretamente o alvo acidente_fatal.
 
 COPY (
     SELECT
@@ -545,7 +547,6 @@ COPY (
         tipo_pista,
         tracado_via,
         uso_solo,
-        mortos,
         acidente_fatal
     FROM vw_acidentes_base
 )
