@@ -30,7 +30,7 @@ SELECT
     causa_acidente,
     tipo_acidente,
     fase_dia,
-    condicao_meteorologica,
+    condicao_metereologica,
     tipo_pista,
     tracado_via,
     uso_solo,
