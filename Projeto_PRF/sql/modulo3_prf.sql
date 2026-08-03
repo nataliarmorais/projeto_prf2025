@@ -12,7 +12,7 @@
 -- acidente_fatal = 1 quando mortos >= 1
 -- acidente_fatal = 0 caso contrário
 --
--- Autor: Caio Vital
+-- Autores: Caio Vital, 
 -- Data: 27/07/2026
 -- =====================================================
 
@@ -23,7 +23,7 @@
 CREATE OR REPLACE TABLE acidentes_prf_2025 AS
 SELECT *
 FROM read_csv_auto(
-    'C:/Users/Aluno/Documents/Caio Vital/Projeto_PRF/dados_brutos/acidentes2025.csv.csv',
+    '{[diretorio do arquivo .csv]}',
     delim=';',
     header=true,
     sample_size=-1,
