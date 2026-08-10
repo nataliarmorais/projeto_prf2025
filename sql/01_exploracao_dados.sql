@@ -468,3 +468,309 @@ GROUP BY
 HAVING COUNT(*) >= 100
 ORDER BY perc_fatais DESC
 LIMIT 30;
+
+-- ======================================================
+-- Introdução ao Lift em SQL
+-- Compara a taxa de fatalidade de cada tipo de acidente
+-- com a taxa global da base.
+-- ======================================================
+
+WITH global AS (
+    SELECT
+        1.0 * SUM(acidente_fatal) / COUNT(*) AS taxa_global
+    FROM vw_acidentes_base
+)
+
+SELECT
+    tipo_acidente,
+    COUNT(*) AS total_acidentes,
+    SUM(acidente_fatal) AS acidentes_fatais,
+    ROUND(
+        1.0 * SUM(acidente_fatal) / COUNT(*),
+        4
+    ) AS confianca,
+    ROUND(
+        (1.0 * SUM(acidente_fatal) / COUNT(*))
+        / taxa_global,
+        2
+    ) AS lift
+FROM vw_acidentes_base, global
+GROUP BY
+    tipo_acidente,
+    taxa_global
+HAVING COUNT(*) >= 100
+ORDER BY lift DESC;
+
+-- ======================================================
+-- Indicadores Finais por Categoria com Lift
+-- Calcula indicadores por tipo de acidente.
+-- ======================================================
+
+WITH global AS (
+    SELECT
+        1.0 * SUM(acidente_fatal) / COUNT(*) AS taxa_global
+    FROM vw_acidentes_base
+)
+
+SELECT
+    tipo_acidente AS categoria,
+    COUNT(*) AS total_acidentes,
+    SUM(CAST(mortos AS INTEGER)) AS total_mortos,
+    SUM(acidente_fatal) AS acidentes_fatais,
+    ROUND(
+        100.0 * SUM(acidente_fatal) / COUNT(*),
+        2
+    ) AS perc_fatais,
+    ROUND(
+        (1.0 * SUM(acidente_fatal) / COUNT(*))
+        / taxa_global,
+        2
+    ) AS lift
+FROM vw_acidentes_base, global
+GROUP BY
+    categoria,
+    taxa_global
+HAVING COUNT(*) >= 100
+ORDER BY lift DESC;
+
+-- ======================================================
+-- Criar View Mensal para Dashboard
+-- Consolida indicadores mensais para uso no Power BI.
+-- ======================================================
+
+CREATE OR REPLACE VIEW vw_indicadores_mensais AS
+
+SELECT
+    EXTRACT(YEAR FROM CAST(data_inversa AS DATE)) AS ano,
+    EXTRACT(MONTH FROM CAST(data_inversa AS DATE)) AS mes,
+    COUNT(*) AS total_acidentes,
+    SUM(CAST(mortos AS INTEGER)) AS total_mortos,
+    SUM(acidente_fatal) AS acidentes_fatais,
+    ROUND(
+        100.0 * SUM(acidente_fatal) / COUNT(*),
+        2
+    ) AS perc_fatais
+FROM vw_acidentes_base
+GROUP BY
+    ano,
+    mes
+ORDER BY
+    ano,
+    mes;
+
+-- ======================================================
+-- Criar View por UF e BR
+-- Consolida indicadores por estado e rodovia.
+-- ======================================================
+
+CREATE OR REPLACE VIEW vw_indicadores_uf_br AS
+
+SELECT
+    uf,
+    br,
+    COUNT(*) AS total_acidentes,
+    SUM(CAST(mortos AS INTEGER)) AS total_mortos,
+    SUM(acidente_fatal) AS acidentes_fatais,
+    ROUND(
+        100.0 * SUM(acidente_fatal) / COUNT(*),
+        2
+    ) AS perc_fatais
+FROM vw_acidentes_base
+WHERE br IS NOT NULL
+GROUP BY
+    uf,
+    br;
+
+-- ======================================================
+-- Criar View Bivariada por Tipo de Acidente
+-- Calcula indicadores e Lift por tipo de acidente.
+-- ======================================================
+
+CREATE OR REPLACE VIEW vw_bivariada_tipo_acidente AS
+
+WITH global AS (
+    SELECT
+        1.0 * SUM(acidente_fatal) / COUNT(*) AS taxa_global
+    FROM vw_acidentes_base
+)
+
+SELECT
+    tipo_acidente AS categoria,
+    COUNT(*) AS total_acidentes,
+    SUM(acidente_fatal) AS acidentes_fatais,
+    ROUND(
+        100.0 * COUNT(*) /
+        SUM(COUNT(*)) OVER (),
+        2
+    ) AS cobertura_perc,
+    ROUND(
+        100.0 * SUM(acidente_fatal) /
+        COUNT(*),
+        2
+    ) AS perc_fatais,
+    ROUND(
+        (1.0 * SUM(acidente_fatal) / COUNT(*))
+        / taxa_global,
+        2
+    ) AS lift
+FROM vw_acidentes_base, global
+GROUP BY
+    categoria,
+    taxa_global
+HAVING COUNT(*) >= 100;
+
+-- ======================================================
+-- Exportar os indicadores mensais para CSV
+-- O arquivo será salvo na pasta resultados.
+-- ======================================================
+
+COPY vw_indicadores_mensais
+TO 'resultados/indicadores_mensais.csv'
+(HEADER, DELIMITER ';');
+
+
+-- ======================================================
+-- Exportar os indicadores por UF e BR
+-- ======================================================
+
+COPY vw_indicadores_uf_br
+TO 'resultados/indicadores_uf_br.csv'
+(HEADER, DELIMITER ';');
+
+-- ======================================================
+-- Exportar a análise bivariada por tipo de acidente
+-- ======================================================
+
+COPY vw_bivariada_tipo_acidente
+TO 'resultados/bivariada_tipo_acidente.csv'
+(HEADER, DELIMITER ';');
+
+
+-- ======================================================
+-- Exportar Base Analítica Completa
+-- Utilizada para análises descritivas
+-- ======================================================
+
+COPY (
+    SELECT
+        data_inversa,
+        dia_semana,
+        horario,
+        uf,
+        br,
+        municipio,
+        causa_acidente,
+        tipo_acidente,
+        classificacao_acidente,
+        fase_dia,
+        condicao_metereologica,
+        tipo_pista,
+        tracado_via,
+        uso_solo,
+        mortos,
+        acidente_fatal
+    FROM vw_acidentes_base
+)
+TO 'resultados/base_analitica_sql.csv'
+(HEADER, DELIMITER ';');
+
+-- ======================================================
+-- Exportar Base Modelável Preliminar
+-- ======================================================
+
+COPY (
+    SELECT
+        uf,
+        br,
+        municipio,
+        EXTRACT(MONTH FROM CAST(data_inversa AS DATE)) AS mes,
+        dia_semana,
+        fase_dia,
+        causa_acidente,
+        tipo_acidente,
+        condicao_metereologica,
+        tipo_pista,
+        tracado_via,
+        uso_solo,
+        acidente_fatal
+    FROM vw_acidentes_base
+)
+TO 'resultados/base_modelavel_preliminar_sql.csv'
+(HEADER, DELIMITER ';');
+
+-- ======================================================
+-- Checagem de valores nulos
+-- Quantifica campos nulos na base.
+-- ======================================================
+
+SELECT
+    SUM(CASE WHEN uf IS NULL
+        THEN 1 ELSE 0 END) AS nulos_uf,
+
+    SUM(CASE WHEN br IS NULL
+        THEN 1 ELSE 0 END) AS nulos_br,
+
+    SUM(CASE WHEN municipio IS NULL
+        THEN 1 ELSE 0 END) AS nulos_municipio,
+
+    SUM(CASE WHEN causa_acidente IS NULL
+        THEN 1 ELSE 0 END) AS nulos_causa,
+
+    SUM(CASE WHEN tipo_acidente IS NULL
+        THEN 1 ELSE 0 END) AS nulos_tipo
+
+FROM vw_acidentes_base;
+
+-- ======================================================
+-- Padronização com COALESCE
+-- Substitui valores nulos apenas na consulta.
+-- ======================================================
+
+SELECT
+    COALESCE(uf, 'NAO_INFORMADO') AS uf_tratada,
+
+    COALESCE(CAST(br AS VARCHAR),
+        'NAO_INFORMADO') AS br_tratada,
+
+    COUNT(*) AS total_acidentes
+
+FROM vw_acidentes_base
+
+GROUP BY
+    uf_tratada,
+    br_tratada
+
+ORDER BY total_acidentes DESC
+
+LIMIT 30;
+
+-- ======================================================
+-- Validação Cruzada de Totais
+-- Compara o total da base com a soma por UF.
+-- ======================================================
+
+SELECT
+    'base' AS origem,
+    COUNT(*) AS total,
+    SUM(acidente_fatal) AS fatais
+FROM vw_acidentes_base
+
+UNION ALL
+
+SELECT
+    'soma_por_uf' AS origem,
+    SUM(total_acidentes),
+    SUM(acidentes_fatais)
+FROM (
+
+    SELECT
+        uf,
+        COUNT(*) AS total_acidentes,
+        SUM(acidente_fatal) AS acidentes_fatais
+    FROM vw_acidentes_base
+    GROUP BY uf
+
+);
+
+    
+
