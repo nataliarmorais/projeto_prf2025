@@ -12,7 +12,7 @@
 -- acidente_fatal = 1 quando mortos >= 1
 -- acidente_fatal = 0 caso contrário
 --
--- Autores: Caio Vital, 
+-- Autores: Caio Vital, Natália Rios, Marlio Ramos, Felipe Alves
 -- Data: 27/07/2026
 -- =====================================================
 
