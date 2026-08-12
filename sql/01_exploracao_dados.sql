@@ -621,7 +621,6 @@ HAVING COUNT(*) >= 100;
 
 -- ======================================================
 -- Exportar os indicadores mensais para CSV
--- O arquivo será salvo na pasta resultados.
 -- ======================================================
 
 COPY vw_indicadores_mensais
@@ -772,5 +771,5 @@ FROM (
 
 );
 
-    
+
 
